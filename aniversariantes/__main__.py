@@ -136,7 +136,7 @@ def main() -> int:
     ]
 
     message_id = enviar_email(
-        regiao=env("AWS_REGION") or env("AWS_DEFAULT_REGION", "us-east-1"),
+        regiao=env("AWS_REGION") or env("AWS_DEFAULT_REGION", "us-east-2"),
         remetente=env("EMAIL_REMETENTE", obrigatorio=True),
         configuration_set=env("SES_CONFIGURATION_SET") or None,
         destinatarios=destinatarios,

@@ -114,9 +114,9 @@ Localmente, copie `.env.example` para `.env`. No Render, configure as variáveis
 | `SITUACOES_ATIVAS` | | Situações consideradas ativas. Padrão `1,2,3,4,5,6,7,9` |
 | `MOSTRAR_FOTOS` | | `true`/`false`. Padrão `true` |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | ✅ | Chaves do usuário IAM que só pode enviar e-mail (veja abaixo) |
-| `AWS_REGION` | ✅ | Região onde o SES está configurado, ex.: `sa-east-1` (São Paulo) |
-| `EMAIL_REMETENTE` | ✅ | Remetente **verificado no SES**, ex.: `aniversarios@suaempresa.com.br` |
-| `SES_CONFIGURATION_SET` | | Configuration set do SES, para métricas de entrega e bounce (opcional) |
+| `AWS_REGION` | ✅ | Região onde o SES está configurado: `us-east-2` (a mesma da loja) |
+| `EMAIL_REMETENTE` | ✅ | Remetente **verificado no SES**: `Casa Contente <nao-responda@casacontente.com.br>` |
+| `SES_CONFIGURATION_SET` | | Configuration set do SES, para métricas de entrega e bounce (opcional; não use o `loja`) |
 | `EMAIL_DESTINATARIOS` | ✅ | E-mails do RH, separados por vírgula (ficam só no Render, fora do repositório público) |
 | `NOME_EMPRESA` | | Texto do cabeçalho e do rodapé do PDF. Padrão `Casa Contente` |
 | `TZ_EMPRESA` | | Fuso usado para definir "o mês atual". Padrão `America/Sao_Paulo` |
@@ -185,24 +185,29 @@ O serviço é um **Cron Job** com runtime **Docker**, definido em [`render.yaml`
 
 ## Configurando o Amazon SES
 
-O envio é feito pelo **Amazon SES**. Configuração única na AWS:
+O envio usa o **mesmo Amazon SES da loja virtual** (projeto `loja-casacontente`, `docs/EMAILS-SES.md`), que já está pronto na região **`us-east-2`**:
 
-1. **Verifique o remetente** em *SES → Configuration → Identities → Create identity*. Pode ser o domínio inteiro (recomendado: adicione os registros DKIM no DNS) ou só o endereço do `EMAIL_REMETENTE`.
-2. **Saia do sandbox** (*SES → Account dashboard → Request production access*). Enquanto a conta estiver no sandbox, o SES só entrega para endereços **verificados**. Se preferir não pedir produção, verifique também os endereços do RH e o seu e-mail de teste.
-3. **Crie um usuário IAM** só para este projeto, com a política mínima abaixo, e gere uma *access key*:
+- identidade do domínio `casacontente.com.br` verificada, com **Easy DKIM** e MAIL FROM `envio.casacontente.com.br` (DNS na Cloudflare);
+- conta **fora do sandbox** (acesso de produção aprovado): entrega para qualquer endereço, inclusive os do RH;
+- remetente `Casa Contente <nao-responda@casacontente.com.br>`.
+
+Falta só a credencial deste projeto:
+
+1. **Crie um usuário IAM** só para os aniversariantes (recomendado, para não compartilhar a chave do `sync-midia` da loja), com a política mínima abaixo, e gere uma *access key*:
    ```json
    {
      "Version": "2012-10-17",
      "Statement": [{
        "Effect": "Allow",
-       "Action": ["ses:SendEmail", "ses:SendRawEmail"],
-       "Resource": "arn:aws:ses:<REGIAO>:<ID_DA_CONTA>:identity/<seu-dominio-ou-email>",
-       "Condition": { "StringEquals": { "ses:FromAddress": "<EMAIL_REMETENTE>" } }
+       "Action": "ses:SendEmail",
+       "Resource": "arn:aws:ses:us-east-2:<ID_DA_CONTA>:identity/casacontente.com.br",
+       "Condition": { "StringEquals": { "ses:FromAddress": "nao-responda@casacontente.com.br" } }
      }]
    }
    ```
-   Se a identidade verificada for o domínio, use o ARN do domínio. Se usar um configuration set, inclua também o ARN dele em `Resource`.
-4. Cadastre `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` e `EMAIL_REMETENTE` no Render.
+   O envio com anexo usa o `SendEmail` da API v2 (conteúdo *raw*), que é autorizado pela ação `ses:SendEmail`.
+   Se usar um configuration set próprio (`SES_CONFIGURATION_SET`), inclua o ARN dele em `Resource`. **Não use o `loja`**: os avisos de bounce/reclamação dele vão para o backend da loja.
+2. Cadastre `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` e `EMAIL_REMETENTE` no Render (`AWS_REGION` já vem como `us-east-2` no `render.yaml`).
 
 O limite do SES é de 40 MB por mensagem; o PDF costuma ter menos de 1 MB.
 
@@ -255,7 +260,7 @@ Outras regras:
 | `Falha na autenticação Sankhya (401)` | `client_id`, `client_secret` ou `X-Token` inválidos ou expirados |
 | PDF sem fotos (só iniciais) | Foto não cadastrada em TFPFUN, ou a aplicação não tem permissão no `DbExplorerSP`. O log mostra um aviso com o motivo |
 | `MessageRejected: Email address is not verified` | Remetente não verificado no SES; ou a conta ainda está no **sandbox** e o destinatário também não está verificado |
-| `AccessDeniedException` (SES) | A política IAM não permite `ses:SendEmail`/`ses:SendRawEmail` na identidade, ou a `AWS_REGION` está errada |
+| `AccessDeniedException` (SES) | A política IAM não permite `ses:SendEmail` na identidade, o remetente é outro, ou a `AWS_REGION` não é `us-east-2` |
 | `NoCredentialsError` | `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` não configuradas |
 | `cannot load library 'libgobject-2.0-0'` (macOS) | Instale o Pango (`brew install pango`). O `run.sh` já ajusta o `DYLD_FALLBACK_LIBRARY_PATH` |
 | E-mail não chegou | Confira a aba **Logs** no Render e a caixa de spam |
