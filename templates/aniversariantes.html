@@ -4,41 +4,40 @@
 <meta charset="utf-8">
 <title>Aniversariantes de {{ mes_nome }} {{ ano }}</title>
 <style>
-  @font-face { font-family: "Pacifico"; src: url("fonts/Pacifico-Regular.ttf"); }
-  @font-face { font-family: "Nunito"; src: url("fonts/Nunito.ttf"); }
+  /* Identidade visual Casa Contente (mesmas cores/fontes do site: landing-page) */
+  @font-face { font-family: "Fredoka"; src: url("fonts/Fredoka.ttf"); }
+  @font-face { font-family: "Manrope"; src: url("fonts/Manrope.ttf"); }
 
   @page {
     size: A4 portrait;
     margin: 32mm 14mm 20mm 14mm;
     @bottom-center {
       content: "{{ empresa }} · Aniversariantes de {{ mes_nome }} {{ ano }} · página " counter(page) " de " counter(pages);
-      font-family: "Nunito"; font-size: 8pt; color: #9a7aa0;
+      font-family: "Manrope"; font-size: 8pt; color: #6b655e;
     }
   }
 
   * { box-sizing: border-box; }
-  body { font-family: "Nunito", sans-serif; color: #3b2147; margin: 0; }
+  body { font-family: "Manrope", sans-serif; color: #3c3c3a; margin: 0; }
 
   /* ---------- decorações repetidas em todas as páginas ---------- */
   .bunting { position: fixed; top: -32mm; left: -14mm; width: 210mm; height: 26mm; }
   .confetti { position: fixed; top: -32mm; left: -14mm; width: 210mm; height: 297mm; z-index: -1; }
-  .balloon-left  { position: absolute; top: -12mm; left: -8mm; width: 26mm; }
-  .balloon-right { position: absolute; top: -14mm; right: -8mm; width: 28mm; }
+  .balloon-left  { position: absolute; top: -10mm; left: -8mm; width: 26mm; }
+  .balloon-right { position: absolute; top: -12mm; right: -8mm; width: 28mm; }
 
   /* ---------- cabeçalho (1ª página) ---------- */
-  header { position: relative; text-align: center; margin: 0 0 9mm 0; padding-top: 2mm; }
-  header .eyebrow {
-    font-weight: 800; letter-spacing: 3pt; text-transform: uppercase;
-    font-size: 10pt; color: #e8547a;
-  }
+  header { position: relative; text-align: center; margin: 0 0 9mm 0; padding-top: 1mm; }
+  header .logo { width: 58mm; height: auto; }
   header h1 {
-    font-family: "Pacifico", cursive; font-weight: normal;
-    font-size: 34pt; line-height: 1.25; margin: 1mm 0 0 0; color: #6a2c91;
+    font-family: "Fredoka", sans-serif; font-weight: 600; letter-spacing: -0.5pt;
+    font-size: 34pt; line-height: 1.1; margin: 5mm 0 0 0; color: #3c3c3a;
   }
+  header h1 em { font-style: normal; color: #d71921; }
   header .sub {
-    display: inline-block; margin-top: 3mm; padding: 1.5mm 6mm;
-    background: #ffd54a; border-radius: 20mm;
-    font-weight: 800; font-size: 11pt; color: #6a2c91;
+    display: inline-block; margin-top: 4mm; padding: 1.5mm 6mm;
+    background: #fff3d1; border-radius: 20mm;
+    font-weight: 700; font-size: 10.5pt; color: #7a5200;
   }
 
   /* ---------- cards ---------- */
@@ -46,63 +45,61 @@
   .grid .card { font-size: 11pt; }
   .grid .card:nth-child(odd) { margin-right: 4.5mm; }
   .card {
-    width: 88.5mm; display: inline-flex; vertical-align: top; margin-bottom: 4mm; align-items: center; gap: 3mm;
+    width: 88.5mm; display: inline-flex; vertical-align: top; margin-bottom: 4mm; align-items: center; gap: 3.5mm;
     padding: 3mm 3.5mm; border-radius: 5mm; background: #ffffff;
-    border: 0.6mm solid #f3d9ec; break-inside: avoid; page-break-inside: avoid;
+    border: 0.5mm solid #e7e1d8; break-inside: avoid; page-break-inside: avoid;
   }
-  .data {
-    display: inline-block; margin-top: 1.5mm; padding: .8mm 3.5mm; border-radius: 10mm;
-    font-weight: 900; font-size: 12pt; letter-spacing: .5pt; color: #fff;
-  }
-  .c0 .data { background: #e8547a; } .c0 { border-color: #f8cdd9; }
-  .c1 .data { background: #6a2c91; } .c1 { border-color: #e0cfee; }
-  .c2 .data { background: #19a7a1; } .c2 { border-color: #c7ebe9; }
-  .c3 .data { background: #f59f1b; } .c3 { border-color: #fde3b8; }
   .avatar {
     flex: none; width: 19mm; height: 19mm; border-radius: 50%; overflow: hidden;
-    border: 0.9mm solid #fff; background: #f3e6f7; text-align: center;
-    font-weight: 900; font-size: 15pt; color: #6a2c91; line-height: 17.2mm;
+    border: 0.9mm solid #d71921; text-align: center;
+    font-family: "Fredoka", sans-serif; font-weight: 600; font-size: 15pt; line-height: 17.2mm;
   }
   .avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .c0 .avatar { border-color: #f8cdd9; } .c1 .avatar { border-color: #e0cfee; }
-  .c2 .avatar { border-color: #c7ebe9; } .c3 .avatar { border-color: #fde3b8; }
   .info { min-width: 0; flex: 1; }
-  .nome { font-weight: 800; font-size: 13pt; line-height: 1.2; color: #3b2147; }
-  .meta { font-size: 8.5pt; color: #7d6587; margin-top: .8mm; line-height: 1.3; }
-
-  .vazio { text-align: center; font-size: 13pt; color: #7d6587; margin-top: 30mm; }
-
-  .mensagem {
-    margin-top: 10mm; text-align: center; break-inside: avoid;
-    font-family: "Pacifico", cursive; font-size: 20pt; color: #e8547a;
+  .nome { font-family: "Fredoka", sans-serif; font-weight: 600; font-size: 13pt; line-height: 1.2; color: #3c3c3a; }
+  .data {
+    display: inline-block; margin-top: 1.5mm; padding: .7mm 3.5mm; border-radius: 10mm;
+    font-family: "Fredoka", sans-serif; font-weight: 600; font-size: 12pt; letter-spacing: .5pt;
   }
-  .mensagem small {
-    display: block; font-family: "Nunito"; font-size: 12pt; font-weight: 600; line-height: 1.5; color: #6a2c91; margin-top: 3mm;
+  /* alterna vermelho (marca) e amarelo (sorriso) */
+  .c0 .avatar { border-color: #d71921; background: #fdecec; color: #d71921; }
+  .c0 .data   { background: #d71921; color: #ffffff; }
+  .c1 .avatar { border-color: #fdb917; background: #fff3d1; color: #7a5200; }
+  .c1 .data   { background: #fdb917; color: #3c3c3a; }
+
+  .vazio { text-align: center; font-size: 13pt; color: #6b655e; margin-top: 30mm; }
+
+  .mensagem { margin-top: 10mm; text-align: center; break-inside: avoid; }
+  .mensagem .titulo {
+    font-family: "Fredoka", sans-serif; font-weight: 600; font-size: 21pt; color: #d71921;
+  }
+  .mensagem p {
+    font-size: 12pt; font-weight: 500; line-height: 1.55; color: #3c3c3a; margin: 2.5mm 0 0;
   }
 </style>
 </head>
 <body>
 
+{% set cores = ["#d71921", "#fdb917", "#b0141b", "#fdb917"] %}
 <!-- Bandeirinhas -->
 <svg class="bunting" viewBox="0 0 210 30" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M0 4 Q105 18 210 4" stroke="#6a2c91" stroke-width="0.6" fill="none"/>
-  {% set cores = ["#e8547a", "#ffd54a", "#19a7a1", "#6a2c91", "#f59f1b"] %}
+  <path d="M0 4 Q105 18 210 4" stroke="#b0141b" stroke-width="0.5" fill="none"/>
   {% for i in range(14) %}
     {% set x = 4 + i * 14.6 %}
     {% set t = x / 210 %}
     {% set y = 4 + 14 * 2 * t * (1 - t) %}
-    <polygon points="{{ x }},{{ y }} {{ x + 11 }},{{ y + 0.3 }} {{ x + 5.5 }},{{ y + 12 }}" fill="{{ cores[i % 5] }}"/>
+    <polygon points="{{ x }},{{ y }} {{ x + 11 }},{{ y + 0.3 }} {{ x + 5.5 }},{{ y + 12 }}" fill="{{ cores[i % 4] }}"/>
   {% endfor %}
 </svg>
 
 <!-- Confetes -->
 <svg class="confetti" viewBox="0 0 210 297" xmlns="http://www.w3.org/2000/svg">
-  {% set pts = [(18,40,0),(40,58,1),(170,36,2),(192,62,3),(150,70,4),(60,30,2),(120,28,0),(12,120,3),(200,140,1),(8,210,4),(204,230,0),(16,280,1),(190,284,2),(100,290,3),(30,170,0),(182,190,4),(140,50,1),(80,64,3)] %}
+  {% set pts = [(18,40,0),(40,58,1),(170,36,1),(192,62,0),(198,100,1),(60,30,1),(120,28,0),(12,120,1),(200,140,0),(8,210,1),(204,230,0),(16,280,1),(190,284,0),(100,290,1),(30,170,0),(182,190,1),(140,50,0),(10,96,1)] %}
   {% for x, y, c in pts %}
     {% if loop.index is even %}
-      <rect x="{{ x }}" y="{{ y }}" width="3" height="1.4" rx="0.5" fill="{{ cores[c] }}" opacity="0.75" transform="rotate({{ loop.index * 23 }} {{ x }} {{ y }})"/>
+      <rect x="{{ x }}" y="{{ y }}" width="3" height="1.4" rx="0.5" fill="{{ cores[c] }}" opacity="0.7" transform="rotate({{ loop.index * 23 }} {{ x }} {{ y }})"/>
     {% else %}
-      <circle cx="{{ x }}" cy="{{ y }}" r="1.1" fill="{{ cores[c] }}" opacity="0.75"/>
+      <circle cx="{{ x }}" cy="{{ y }}" r="1.1" fill="{{ cores[c] }}" opacity="0.7"/>
     {% endif %}
   {% endfor %}
 </svg>
@@ -110,28 +107,28 @@
 <header>
 <!-- Balões -->
 <svg class="balloon-left" viewBox="0 0 60 110" xmlns="http://www.w3.org/2000/svg">
-  <path d="M22 52 C 20 70, 30 80, 26 108" stroke="#9a7aa0" stroke-width="0.8" fill="none"/>
-  <path d="M40 58 C 42 74, 34 88, 38 108" stroke="#9a7aa0" stroke-width="0.8" fill="none"/>
-  <ellipse cx="22" cy="28" rx="16" ry="20" fill="#e8547a"/>
-  <polygon points="19,48 25,48 22,53" fill="#e8547a"/>
-  <ellipse cx="17" cy="20" rx="4" ry="6" fill="#fff" opacity=".35"/>
-  <ellipse cx="42" cy="38" rx="13" ry="16" fill="#ffd54a"/>
-  <polygon points="39,54 45,54 42,58" fill="#ffd54a"/>
+  <path d="M22 52 C 20 70, 30 80, 26 108" stroke="#b9b2a8" stroke-width="0.8" fill="none"/>
+  <path d="M40 58 C 42 74, 34 88, 38 108" stroke="#b9b2a8" stroke-width="0.8" fill="none"/>
+  <ellipse cx="22" cy="28" rx="16" ry="20" fill="#d71921"/>
+  <polygon points="19,48 25,48 22,53" fill="#d71921"/>
+  <ellipse cx="17" cy="20" rx="4" ry="6" fill="#fff" opacity=".3"/>
+  <ellipse cx="42" cy="38" rx="13" ry="16" fill="#fdb917"/>
+  <polygon points="39,54 45,54 42,58" fill="#fdb917"/>
   <ellipse cx="38" cy="32" rx="3" ry="5" fill="#fff" opacity=".4"/>
 </svg>
 <svg class="balloon-right" viewBox="0 0 60 110" xmlns="http://www.w3.org/2000/svg">
-  <path d="M38 50 C 40 70, 30 84, 34 108" stroke="#9a7aa0" stroke-width="0.8" fill="none"/>
-  <path d="M18 60 C 16 76, 24 88, 22 108" stroke="#9a7aa0" stroke-width="0.8" fill="none"/>
-  <ellipse cx="38" cy="27" rx="16" ry="20" fill="#19a7a1"/>
-  <polygon points="35,47 41,47 38,52" fill="#19a7a1"/>
-  <ellipse cx="33" cy="19" rx="4" ry="6" fill="#fff" opacity=".35"/>
-  <ellipse cx="18" cy="42" rx="13" ry="16" fill="#6a2c91"/>
-  <polygon points="15,58 21,58 18,62" fill="#6a2c91"/>
-  <ellipse cx="14" cy="36" rx="3" ry="5" fill="#fff" opacity=".35"/>
+  <path d="M38 50 C 40 70, 30 84, 34 108" stroke="#b9b2a8" stroke-width="0.8" fill="none"/>
+  <path d="M18 60 C 16 76, 24 88, 22 108" stroke="#b9b2a8" stroke-width="0.8" fill="none"/>
+  <ellipse cx="38" cy="27" rx="16" ry="20" fill="#fdb917"/>
+  <polygon points="35,47 41,47 38,52" fill="#fdb917"/>
+  <ellipse cx="33" cy="19" rx="4" ry="6" fill="#fff" opacity=".4"/>
+  <ellipse cx="18" cy="42" rx="13" ry="16" fill="#d71921"/>
+  <polygon points="15,58 21,58 18,62" fill="#d71921"/>
+  <ellipse cx="14" cy="36" rx="3" ry="5" fill="#fff" opacity=".3"/>
 </svg>
 
-  <div class="eyebrow">{{ empresa }} celebra</div>
-  <h1>Aniversariantes<br>de {{ mes_nome }}</h1>
+  <img class="logo" src="logo.svg" alt="Casa Contente">
+  <h1>Aniversariantes de <em>{{ mes_nome }}</em></h1>
   <div class="sub">
     {% if total == 1 %}1 aniversariante{% else %}{{ total }} aniversariantes{% endif %} em {{ ano }}
   </div>
@@ -140,7 +137,7 @@
 {% if itens %}
 <div class="grid">
   {% for item in itens %}
-  <div class="card c{{ loop.index0 % 4 }}">
+  <div class="card c{{ loop.index0 % 2 }}">
     {% if mostrar_fotos %}
     <div class="avatar">{% if item.f.foto %}<img src="{{ item.f.foto }}" alt="">{% else %}{{ item.f.iniciais }}{% endif %}</div>
     {% endif %}
@@ -152,8 +149,8 @@
   {% endfor %}
 </div>
 <div class="mensagem">
-  Parabéns e muitas felicidades!
-  <small>Que suas vidas sejam sempre repletas de saúde, recheadas de paz,<br>cobertas de amor e realizações maravilhosas.</small>
+  <div class="titulo">Parabéns e muitas felicidades!</div>
+  <p>Que suas vidas sejam sempre repletas de saúde, recheadas de paz,<br>cobertas de amor e realizações maravilhosas.</p>
 </div>
 {% else %}
 <p class="vazio">Nenhum aniversariante entre os colaboradores ativos neste mês.</p>

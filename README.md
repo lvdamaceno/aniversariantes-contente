@@ -59,13 +59,14 @@ flowchart LR
 ## O PDF
 
 - Formato **A4 retrato**, pronto para imprimir e fixar no mural.
-- Tema festivo com bandeirinhas, balões e confetes.
+- Identidade visual da **Casa Contente** (cores, fontes e logo, as mesmas do site), com clima festivo: bandeirinhas, balões e confetes em vermelho e amarelo.
 - Um card por pessoa com **foto** (ou as iniciais), **nome** e **data (DD/MM)**, em ordem de dia.
 - Quando há muitos aniversariantes, a lista continua nas páginas seguintes, sem cortar nenhum card.
 - No final vem a mensagem:
   > *Parabéns e muitas felicidades!*
   > Que suas vidas sejam sempre repletas de saúde, recheadas de paz, cobertas de amor e realizações maravilhosas.
-- As fontes ([Pacifico](https://fonts.google.com/specimen/Pacifico) e [Nunito](https://fonts.google.com/specimen/Nunito), licença OFL) ficam dentro do projeto, então o resultado é o mesmo em qualquer máquina.
+- Cores da marca: vermelho `#d71921` e amarelo "sorriso" `#fdb917`, com textos em grafite `#3c3c3a`.
+- As fontes da marca ([Fredoka](https://fonts.google.com/specimen/Fredoka) nos títulos e [Manrope](https://fonts.google.com/specimen/Manrope) no texto, licença OFL) e o logo (`templates/logo.svg`) ficam dentro do projeto, então o resultado é o mesmo em qualquer máquina.
 
 ## O e-mail
 
@@ -85,8 +86,9 @@ aniversariantes-contente/
 │   ├── pdf.py            # renderiza o template e gera o PDF
 │   └── email_sender.py   # envio via Amazon SES com anexo
 ├── templates/
-│   ├── aniversariantes.html  # layout festivo do PDF (HTML + CSS)
-│   └── fonts/                # fontes embutidas
+│   ├── aniversariantes.html  # layout do PDF (HTML + CSS)
+│   ├── logo.svg              # logo Casa Contente
+│   └── fonts/                # Fredoka + Manrope (fontes da marca)
 ├── fotos/                # fotos manuais opcionais (ignoradas pelo git)
 ├── docs/                 # imagens do README
 ├── Dockerfile            # imagem usada no Render
