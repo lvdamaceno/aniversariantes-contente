@@ -162,10 +162,16 @@ Use `testar-envio.sh` para receber o **arquivo real** (dados da Sankhya) **somen
 
 O script equivale a `./run.sh --para voce@suaempresa.com.br`. A opção `--para` pode ser repetida para mandar a mais de um endereço.
 
-**Teste no Render**: abra o Cron Job → **Shell** (ou use `render ssh`) e rode:
+**Teste no Render**: abra o Cron Job → **Shell** (ou use `render ssh`) e rode, dentro de `/app`:
 ```bash
-python -m aniversariantes --para voce@suaempresa.com.br
+python -m aniversariantes --para voce@suaempresa.com.br             # dados reais, só para você
+python -m aniversariantes --mes 12 --para voce@suaempresa.com.br    # outro mês
+python -m aniversariantes --para voce@suaempresa.com.br --exemplo   # dados fictícios, testa só o SES
+python -m aniversariantes --sem-email                               # só gera o PDF
 ```
+> ⚠️ Sem `--para`, o comando envia para o RH de verdade.
+
+Nos logs, um envio que deu certo mostra, nesta ordem: `Autenticado na Sankhya`, `PDF gerado: ...` e a linha final com o `MessageId` do SES.
 
 ## Deploy no Render
 
@@ -179,9 +185,16 @@ O serviço é um **Cron Job** com runtime **Docker**, definido em [`render.yaml`
 
 **Primeira vez:**
 1. No Render, crie o Cron Job apontando para este repositório (ou use **New → Blueprint**, que lê o `render.yaml`).
-2. Em **Environment**, preencha as variáveis obrigatórias (`SANKHYA_*`, `AWS_*`, `EMAIL_REMETENTE`, `EMAIL_DESTINATARIOS`).
-3. Use **Trigger Run** para disparar uma vez. Atenção: isso envia o e-mail de verdade para o RH. Para um teste seguro, use o Shell com `--para`, como mostrado acima.
+2. Em **Environment**, preencha as variáveis obrigatórias (`SANKHYA_*`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `EMAIL_REMETENTE`, `EMAIL_DESTINATARIOS`). `AWS_REGION` já vem do `render.yaml`.
+3. Teste pelo **Shell** com `--para`, como mostrado acima. O botão **Trigger Run** também dispara uma execução, mas envia o e-mail de verdade para o RH.
 4. Os logs de cada execução ficam na aba **Logs**.
+
+**Para rodar sozinho todo mês**, confira uma vez:
+- **Settings → Schedule** = `0 11 1 * *` (vem do `render.yaml` se o serviço foi criado pelo Blueprint; se foi criado na mão, ajuste);
+- **Settings → Docker Command** **vazio** (usa o `CMD` do Dockerfile). Se ficou algo com `--para` de um teste, apague, senão o e-mail vai só para essa pessoa;
+- **Environment → `EMAIL_DESTINATARIOS`** com os e-mails do RH (e não o seu, se trocou para testar).
+
+Não há nada a fazer na virada do mês: cada execução consulta a Sankhya na hora e gera um PDF novo para o mês corrente (veja [Regras de negócio](#regras-de-negócio)). Para conferir o mês seguinte com antecedência, rode `python -m aniversariantes --mes <N> --sem-email` (ou com `--para` para receber).
 
 ## Configurando o Amazon SES
 
@@ -191,23 +204,34 @@ O envio usa o **mesmo Amazon SES da loja virtual** (projeto `loja-casacontente`,
 - conta **fora do sandbox** (acesso de produção aprovado): entrega para qualquer endereço, inclusive os do RH;
 - remetente `Casa Contente <nao-responda@casacontente.com.br>`.
 
-Falta só a credencial deste projeto:
+### Credencial deste projeto (já criada em 03/11/2026)
 
-1. **Crie um usuário IAM** só para os aniversariantes (recomendado, para não compartilhar a chave do `sync-midia` da loja), com a política mínima abaixo, e gere uma *access key*:
-   ```json
-   {
-     "Version": "2012-10-17",
-     "Statement": [{
-       "Effect": "Allow",
-       "Action": ["ses:SendEmail", "ses:SendRawEmail"],
-       "Resource": "arn:aws:ses:us-east-2:<ID_DA_CONTA>:identity/casacontente.com.br",
-       "Condition": { "StringEquals": { "ses:FromAddress": "nao-responda@casacontente.com.br" } }
-     }]
-   }
-   ```
-   O envio com anexo usa o `SendEmail` da API v2 com conteúdo *raw*, que o SES autoriza pela ação **`ses:SendRawEmail`**: as duas ações são necessárias. Se reaproveitar o `sync-midia` da loja, inclua `ses:SendRawEmail` na política `envio-email-loja` dele.
-   Se usar um configuration set próprio (`SES_CONFIGURATION_SET`), inclua o ARN dele em `Resource`. **Não use o `loja`**: os avisos de bounce/reclamação dele vão para o backend da loja.
-2. Cadastre `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` e `EMAIL_REMETENTE` no Render (`AWS_REGION` já vem como `us-east-2` no `render.yaml`).
+O projeto tem um **usuário IAM próprio**, `aniversariantes-email`, sem acesso ao console e com uma única política *inline*, `enviar-email-aniversariantes`:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Action": ["ses:SendEmail", "ses:SendRawEmail"],
+    "Resource": "arn:aws:ses:us-east-2:<ID_DA_CONTA>:identity/casacontente.com.br",
+    "Condition": { "StringEquals": { "ses:FromAddress": "nao-responda@casacontente.com.br" } }
+  }]
+}
+```
+
+- **As duas ações são necessárias.** O envio com anexo usa o `SendEmail` da API v2 com conteúdo *raw*, que o SES autoriza como **`ses:SendRawEmail`**. Só com `ses:SendEmail`, o envio dá `AccessDeniedException`.
+- A chave desse usuário fica só no `.env` local e no Render. **Não use a chave do `sync-midia`** da loja.
+- Se usar um configuration set próprio (`SES_CONFIGURATION_SET`), inclua o ARN dele em `Resource`. **Não use o `loja`**: os avisos de bounce/reclamação dele vão para o backend da loja.
+
+### Como recriar ou trocar a chave (console da AWS)
+
+Tudo no **IAM** (https://console.aws.amazon.com/iam/), que é global: a região do topo da tela não importa.
+
+1. **Usuário** (se não existir): **Users → Create user** → *User name* `aniversariantes-email`, sem marcar *Provide user access to the AWS Management Console* → **Next** → **Next** (sem permissões) → **Create user**.
+2. **Permissão**: no usuário, aba **Permissions → Add permissions → Create inline policy** → **JSON** → cole a política acima (com o ID da conta) → **Next** → *Policy name* `enviar-email-aniversariantes` → **Create policy**.
+3. **Chave**: aba **Security credentials → Access keys → Create access key** → *Application running outside AWS* (ou *Other*) → **Next** → descrição `Render - aniversariantes` → **Create access key** → **Download .csv file** (o *secret* só aparece nessa tela) → **Done**.
+4. Atualize `AWS_ACCESS_KEY_ID` e `AWS_SECRET_ACCESS_KEY` no Render e no `.env` local, teste com `--para` e, se for uma troca, **desative e apague a chave antiga** (*Access keys → Actions → Deactivate*, depois *Delete*).
 
 O limite do SES é de 40 MB por mensagem; o PDF costuma ter menos de 1 MB.
 
@@ -241,14 +265,15 @@ Outras regras:
 - Usa o **nome social** quando ele estiver preenchido.
 - Ordena por dia do aniversário e depois por nome.
 - Um colaborador que aparece repetido (mesma empresa + código) entra só uma vez.
-- O "mês do envio" é o mês atual no fuso `America/Sao_Paulo`.
+- O "mês do envio" é o mês atual no fuso `America/Sao_Paulo`. O cron roda no dia 1º às 08:00 de Brasília (11:00 UTC do mesmo dia), então sempre pega o mês que começa.
+- Nada fica guardado entre execuções: a lista vem da Sankhya no momento do envio, com admissões, desligamentos e correções do mês já refletidos.
 
 ## Segurança
 
 - **Nenhuma credencial fica no código.** Tudo vem de variáveis de ambiente. O `.env` está no `.gitignore` e no `.dockerignore`.
 - No Render, as variáveis sensíveis (incluindo os e-mails do RH) são cadastradas no painel e não ficam no `render.yaml`.
 - A Sankhya e o SES são acessados apenas via HTTPS.
-- O usuário IAM do SES tem **permissão mínima**: só pode enviar e-mail a partir da identidade verificada.
+- O usuário IAM do SES (`aniversariantes-email`) é **exclusivo deste projeto** e tem **permissão mínima**: só envia e-mail, só pelo domínio `casacontente.com.br`, só como `nao-responda@` e só na região `us-east-2`.
 - Os PDFs gerados (`saida/`) e as fotos (`fotos/`) **não são versionados**.
 - Mensagens de erro não exibem tokens nem senhas.
 - Para trocar credenciais, gere um novo *client secret* na Área do Desenvolvedor Sankhya ou um novo X-Token no Sankhya Om e atualize as variáveis no Render.
@@ -260,10 +285,16 @@ Outras regras:
 | `Falha na autenticação Sankhya (401)` | `client_id`, `client_secret` ou `X-Token` inválidos ou expirados |
 | PDF sem fotos (só iniciais) | Foto não cadastrada em TFPFUN, ou a aplicação não tem permissão no `DbExplorerSP`. O log mostra um aviso com o motivo |
 | `MessageRejected: Email address is not verified` | Remetente não verificado no SES; ou a conta ainda está no **sandbox** e o destinatário também não está verificado |
-| `AccessDeniedException` (SES) | A política IAM não permite `ses:SendEmail` e `ses:SendRawEmail` na identidade, o remetente é outro, ou a `AWS_REGION` não é `us-east-2` |
+| `AccessDeniedException` com `sa-east-1` (ou outra região) na mensagem | `AWS_REGION` errada: precisa ser `us-east-2` |
+| `AccessDeniedException` ... `not authorized to perform 'ses:SendRawEmail'` | Falta `ses:SendRawEmail` na política do usuário IAM |
+| `AccessDeniedException` com `user/sync-midia` na mensagem | Está usando a chave da loja; troque pela do `aniversariantes-email` |
+| `AccessDeniedException` (outros casos) | Remetente diferente de `nao-responda@casacontente.com.br`, ou a política não cobre a identidade `casacontente.com.br` |
+| `InvalidClientTokenId` / `SignatureDoesNotMatch` | Chave AWS copiada errada (espaço sobrando, caractere faltando) ou desativada |
 | `NoCredentialsError` | `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` não configuradas |
 | `cannot load library 'libgobject-2.0-0'` (macOS) | Instale o Pango (`brew install pango`). O `run.sh` já ajusta o `DYLD_FALLBACK_LIBRARY_PATH` |
-| E-mail não chegou | Confira a aba **Logs** no Render e a caixa de spam |
+| E-mail não chegou | Confira a aba **Logs** no Render (procure o `MessageId`) e a caixa de spam |
+| Cron não rodou no dia 1º | Confira **Settings → Schedule** (`0 11 1 * *`) e se o serviço não está suspenso |
+| E-mail do mês foi só para uma pessoa | Sobrou `--para` em **Settings → Docker Command** ou `EMAIL_DESTINATARIOS` ficou com o e-mail de teste |
 
 ---
 
