@@ -1,0 +1,34 @@
+services:
+  - type: cron
+    name: aniversariantes-contente
+    runtime: docker
+    # Render usa UTC: 11:00 UTC = 08:00 em Brasília, todo dia 1º do mês
+    schedule: "0 11 1 * *"
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: SANKHYA_BASE_URL
+        value: https://api.sankhya.com.br
+      - key: SANKHYA_CLIENT_ID
+        sync: false
+      - key: SANKHYA_CLIENT_SECRET
+        sync: false
+      - key: SANKHYA_X_TOKEN
+        sync: false
+      - key: SANKHYA_CODIGO_EMPRESA
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: EMAIL_REMETENTE
+        sync: false
+      - key: EMAIL_DESTINATARIOS
+        sync: false
+      - key: NOME_EMPRESA
+        value: Casa Contente
+      - key: MOSTRAR_FOTOS
+        value: "true"

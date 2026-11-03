@@ -1,0 +1,5 @@
+.venv
+.env
+saida
+**/__pycache__
+.git

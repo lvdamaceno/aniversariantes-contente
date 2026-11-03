@@ -1,0 +1,6 @@
+.venv/
+.env
+saida/
+__pycache__/
+fotos/*
+!fotos/.gitkeep
