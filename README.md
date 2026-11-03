@@ -5,7 +5,7 @@ Automação que, **todo dia 1º de cada mês às 08:00 (horário de Brasília)**
 Roda como **Cron Job no [Render](https://render.com)** a partir de uma imagem Docker.
 
 <p align="center">
-  <img src="docs/pdf-exemplo-marca.png" width="420" alt="Exemplo do PDF gerado">
+  <img src="docs/pdf-exemplo-empresa.png" width="420" alt="Exemplo do PDF gerado">
 </p>
 
 > As imagens deste README usam **dados fictícios**.
@@ -50,7 +50,7 @@ flowchart LR
 
    client_id=...&client_secret=...&grant_type=client_credentials
    ```
-2. **Consulta de funcionários**: `GET /v1/pessoal/funcionarios-detalhados`, percorrendo todas as páginas (`page=0,1,2…` enquanto `hasMore=true`).
+2. **Consulta de funcionários**: usa `GET /v1/pessoal/funcionarios-detalhados`, percorrendo todas as páginas. Se o endpoint não existir no ambiente (módulo Pessoal anterior à 5.126, que é o caso hoje), o script lista os códigos em `GET /v1/pessoal/funcionarios`, filtra os ativos e busca o detalhe de cada um em `GET /v1/pessoal/funcionarios/{codigo}/empresa/{empresa}`, 5 em paralelo. Com cerca de 108 ativos, leva uns 15 segundos.
 3. **Filtro**: mantém só os colaboradores **ativos** com nascimento no mês do envio (veja [Regras de negócio](#regras-de-negócio)).
 4. **Fotos** (opcional): veja [Fotos dos colaboradores](#fotos-dos-colaboradores).
 5. **PDF**: um template HTML/CSS (`templates/aniversariantes.html`) é renderizado com Jinja2 e convertido em PDF pelo WeasyPrint.
@@ -60,7 +60,8 @@ flowchart LR
 
 - Formato **A4 retrato**, pronto para imprimir e fixar no mural.
 - Identidade visual da **Casa Contente** (cores, fontes e logo, as mesmas do site), com clima festivo: bandeirinhas, balões e confetes em vermelho e amarelo.
-- Um card por pessoa com **foto** (ou as iniciais), **nome** e **data (DD/MM)**, em ordem de dia.
+- Um card por pessoa com **foto** (ou as iniciais), **nome**, **empresa** e **data (DD/MM)**, em ordem de dia.
+- A empresa vem da razão social cadastrada na Sankhya, sem sufixos como LTDA, ME ou EIRELI. Para usar um nome mais curto, configure `EMPRESAS_APELIDOS` (ex.: `1=Casa Contente Matriz;2=Casa Contente Filial`).
 - Quando há muitos aniversariantes, a lista continua nas páginas seguintes, sem cortar nenhum card.
 - No final vem a mensagem:
   > *Parabéns e muitas felicidades!*
@@ -110,9 +111,9 @@ Localmente, copie `.env.example` para `.env`. No Render, configure as variáveis
 | `SANKHYA_X_TOKEN` | ✅ | Token da tela **Configurações Gateway** no Sankhya Om |
 | `SANKHYA_BASE_URL` | | Padrão `https://api.sankhya.com.br` (sandbox: `https://api.sandbox.sankhya.com.br`) |
 | `SANKHYA_CODIGO_EMPRESA` | | Filtra uma empresa. Vazio = todas |
+| `EMPRESAS_APELIDOS` | | Nome da empresa no card, por código. Ex.: `1=Casa Contente Matriz;2=Casa Contente Filial` |
 | `SITUACOES_ATIVAS` | | Situações consideradas ativas. Padrão `1,2,3,4,5,6,7,9` |
 | `MOSTRAR_FOTOS` | | `true`/`false`. Padrão `true` |
-| `SANKHYA_CAMPO_FOTO` | | Campo da foto na entidade `Funcionario`. Padrão `IMAGEM` |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | ✅ | Chaves do usuário IAM que só pode enviar e-mail (veja abaixo) |
 | `AWS_REGION` | ✅ | Região onde o SES está configurado, ex.: `sa-east-1` (São Paulo) |
 | `EMAIL_REMETENTE` | ✅ | Remetente **verificado no SES**, ex.: `aniversarios@suaempresa.com.br` |
@@ -121,7 +122,7 @@ Localmente, copie `.env.example` para `.env`. No Render, configure as variáveis
 | `NOME_EMPRESA` | | Texto do cabeçalho e do rodapé do PDF. Padrão `Casa Contente` |
 | `TZ_EMPRESA` | | Fuso usado para definir "o mês atual". Padrão `America/Sao_Paulo` |
 
-> **Pré-requisito Sankhya:** o módulo Pessoal precisa estar na versão **5.126.0 ou superior** para ter o endpoint `funcionarios-detalhados`.
+> **Sankhya:** funciona com qualquer versão do módulo Pessoal que tenha `/v1/pessoal/funcionarios`. A partir da 5.126.0, usa o `funcionarios-detalhados`, que é mais rápido. Para as fotos, a aplicação precisa de permissão no `DbExplorerSP.executeQuery`.
 
 ## Rodando localmente
 
@@ -211,7 +212,7 @@ O limite do SES é de 40 MB por mensagem; o PDF costuma ter menos de 1 MB.
 A API REST de Pessoal da Sankhya **não retorna foto**. O sistema tenta, nesta ordem:
 
 1. **Arquivo local** `fotos/{CODEMP}_{CODFUNC}.jpg` (ou `.png`).
-2. **Sankhya Gateway**: o campo `IMAGEM` da entidade `Funcionario` (TFPFUN), via `CRUDServiceProvider.loadRecords`. Funciona se a foto estiver cadastrada e a aplicação tiver permissão nesse serviço.
+2. **Sankhya**: a coluna `TFPFUN.IMAGEM`, a foto do cadastro do funcionário. A busca usa o serviço `DbExplorerSP.executeQuery` do Gateway, em lotes de até 10 pessoas por consulta. Como o `loadRecords` devolve esse BLOB vazio, o próprio SQL Server converte a imagem para base64. Só leitura; a aplicação precisa de permissão no DbExplorer.
 3. **Iniciais do nome** num círculo colorido (fallback).
 
 Uma foto que não carregar **nunca impede o envio**.
@@ -253,8 +254,7 @@ Outras regras:
 | Sintoma | Causa provável |
 |---|---|
 | `Falha na autenticação Sankhya (401)` | `client_id`, `client_secret` ou `X-Token` inválidos ou expirados |
-| `404` em `funcionarios-detalhados` | Módulo Pessoal abaixo da versão 5.126.0 |
-| PDF sem fotos (só iniciais) | Fotos não cadastradas ou aplicação sem permissão no `loadRecords`. Rode com `LOG_LEVEL=DEBUG` para ver o motivo |
+| PDF sem fotos (só iniciais) | Foto não cadastrada em TFPFUN, ou a aplicação não tem permissão no `DbExplorerSP`. O log mostra um aviso com o motivo |
 | `MessageRejected: Email address is not verified` | Remetente não verificado no SES; ou a conta ainda está no **sandbox** e o destinatário também não está verificado |
 | `AccessDeniedException` (SES) | A política IAM não permite `ses:SendEmail`/`ses:SendRawEmail` na identidade, ou a `AWS_REGION` está errada |
 | `NoCredentialsError` | `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` não configuradas |

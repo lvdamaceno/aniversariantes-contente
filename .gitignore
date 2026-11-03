@@ -4,3 +4,4 @@ saida/
 __pycache__/
 fotos/*
 !fotos/.gitkeep
+.DS_Store

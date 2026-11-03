@@ -11,6 +11,7 @@ import base64
 import binascii
 import logging
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import date, datetime
 
@@ -92,71 +93,99 @@ class SankhyaClient:
         raise RuntimeError(f"Falha ao consultar {path}")
 
     # ------------------------------------------------------------ funcionários
-    def listar_funcionarios(self, codigo_empresa: int | None = None) -> list[dict]:
-        """GET /v1/pessoal/funcionarios-detalhados com paginação."""
-        todos: list[dict] = []
+    def _paginar(self, path: str, chave: str, params: dict) -> list[dict]:
+        itens: list[dict] = []
         page = 0
         while True:
-            params = {"page": page}
-            if codigo_empresa:
-                params["codigoEmpresa"] = codigo_empresa
-            data = self._get("/v1/pessoal/funcionarios-detalhados", params)
-            todos.extend(data.get("funcionarios") or [])
-            has_more = str((data.get("pagination") or {}).get("hasMore", "false")).lower() == "true"
-            if not has_more:
-                break
+            data = self._get(path, {**params, "page": page})
+            itens.extend(data.get(chave) or [])
+            if str((data.get("pagination") or {}).get("hasMore", "false")).lower() != "true":
+                return itens
             page += 1
-        log.info("%d funcionários retornados pela API", len(todos))
-        return todos
+
+    def listar_funcionarios(
+        self, codigo_empresa: int | None = None, situacoes: set[str] | None = None
+    ) -> list[dict]:
+        """Funcionários com dados detalhados, no formato de /funcionarios-detalhados.
+
+        Usa GET /v1/pessoal/funcionarios-detalhados (módulo Pessoal >= 5.126). Se o
+        endpoint não existir no ambiente (404), lista os códigos em /v1/pessoal/funcionarios,
+        filtra pela situação e busca o detalhe de cada um em
+        /v1/pessoal/funcionarios/{codigo}/empresa/{empresa}.
+        """
+        params = {"codigoEmpresa": codigo_empresa} if codigo_empresa else {}
+        try:
+            todos = self._paginar("/v1/pessoal/funcionarios-detalhados", "funcionarios", params)
+            log.info("%d funcionários retornados pela API (funcionarios-detalhados)", len(todos))
+            return todos
+        except requests.HTTPError as exc:
+            if exc.response is None or exc.response.status_code != 404:
+                raise
+            log.info("Endpoint funcionarios-detalhados indisponível neste ambiente; usando lista + detalhe")
+
+        codigos = self._paginar("/v1/pessoal/funcionarios", "codigos", params)
+        if situacoes:
+            codigos = [c for c in codigos if str(c.get("situacao", "")).strip() in situacoes]
+        log.info("%d funcionários ativos na lista; buscando detalhes", len(codigos))
+
+        def detalhar(item: dict) -> dict:
+            emp, func = int(item["codigoEmpresa"]), int(item["codigoFuncionario"])
+            d = self._get(f"/v1/pessoal/funcionarios/{func}/empresa/{emp}", {})
+            contrato = d.setdefault("dadosContratuais", {})
+            contrato.setdefault("lotacao", {
+                "departamento": contrato.get("departamento"),
+                "cargo": contrato.get("cargo"),
+            })
+            d["codigoEmpresa"], d["codigoFuncionario"] = emp, func
+            return d
+
+        self._headers()  # autentica antes de paralelizar
+        with ThreadPoolExecutor(max_workers=5) as pool:
+            return list(pool.map(detalhar, codigos))
 
     # ------------------------------------------------------------------ fotos
-    def buscar_foto(self, codigo_empresa: int, codigo_funcionario: int, campo: str = "IMAGEM") -> str | None:
-        """Tenta obter a foto do funcionário (TFPFUN) via CRUDServiceProvider.loadRecords no Gateway.
+    def _executar_sql(self, sql: str) -> list[list]:
+        """Consulta somente leitura via DbExplorerSP.executeQuery (Gateway)."""
+        resp = self.session.post(
+            f"{self.base_url}/gateway/v1/mge/service.sbr",
+            params={"serviceName": "DbExplorerSP.executeQuery", "outputType": "json"},
+            headers={**self._headers(), "Content-Type": "application/json"},
+            json={"serviceName": "DbExplorerSP.executeQuery", "requestBody": {"sql": sql}},
+            timeout=self.timeout,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        if str(data.get("status")) != "1":
+            raise RuntimeError(data.get("statusMessage") or "erro no DbExplorerSP.executeQuery")
+        return (data.get("responseBody") or {}).get("rows") or []
 
-        A API REST de Pessoal não expõe foto, então isso é "melhor esforço":
-        retorna um data URI ou None, nunca lança exceção.
+    def buscar_fotos(self, chaves: list[tuple[int, int]], lote: int = 10) -> dict[tuple[int, int], str]:
+        """Fotos de TFPFUN.IMAGEM para os pares (CODEMP, CODFUNC). Retorna {chave: data URI}.
+
+        A coluna é BLOB (tipo 'image' no SQL Server) e o loadRecords a devolve vazia,
+        então o SQL Server converte para base64 e a consulta vai pelo DbExplorer.
+        Foto é opcional: falhas são registradas em log e nunca interrompem o envio.
         """
-        body = {
-            "serviceName": "CRUDServiceProvider.loadRecords",
-            "requestBody": {
-                "dataSet": {
-                    "rootEntity": "Funcionario",
-                    "ignoreCalculatedFields": "true",
-                    "useFileBasedPagination": "true",
-                    "includePresentationFields": "N",
-                    "offsetPage": "0",
-                    "criteria": {
-                        "expression": {"$": "this.CODEMP = ? AND this.CODFUNC = ?"},
-                        "parameter": [
-                            {"$": str(codigo_empresa), "type": "I"},
-                            {"$": str(codigo_funcionario), "type": "I"},
-                        ],
-                    },
-                    "entity": {"fieldset": {"list": campo}},
-                }
-            },
-        }
-        try:
-            resp = self.session.post(
-                f"{self.base_url}/gateway/v1/mge/service.sbr",
-                params={"serviceName": "CRUDServiceProvider.loadRecords", "outputType": "json"},
-                headers={**self._headers(), "Content-Type": "application/json"},
-                json=body,
-                timeout=self.timeout,
+        fotos: dict[tuple[int, int], str] = {}
+        # int() garante que só números entram no SQL
+        chaves = [(int(e), int(f)) for e, f in chaves]
+        for inicio in range(0, len(chaves), lote):
+            grupo = chaves[inicio : inicio + lote]
+            filtro = " OR ".join(f"(CODEMP = {e} AND CODFUNC = {f})" for e, f in grupo)
+            sql = (
+                "SELECT T.CODEMP, T.CODFUNC, "
+                "CAST('' AS XML).value('xs:base64Binary(sql:column(\"T.B\"))', 'VARCHAR(MAX)') AS B64 "
+                "FROM (SELECT CODEMP, CODFUNC, CAST(IMAGEM AS VARBINARY(MAX)) AS B "
+                f"FROM TFPFUN WHERE IMAGEM IS NOT NULL AND ({filtro})) T"
             )
-            resp.raise_for_status()
-            data = resp.json()
-            if str(data.get("status")) != "1":
-                log.debug("loadRecords foto %s/%s: %s", codigo_empresa, codigo_funcionario, data.get("statusMessage"))
-                return None
-            entity = ((data.get("responseBody") or {}).get("entities") or {}).get("entity")
-            if isinstance(entity, list):
-                entity = entity[0] if entity else None
-            valor = ((entity or {}).get("f0") or {}).get("$")
-            return _para_data_uri(valor)
-        except Exception as exc:  # noqa: BLE001 - foto é opcional
-            log.debug("Foto indisponível para %s/%s: %s", codigo_empresa, codigo_funcionario, exc)
-            return None
+            try:
+                for emp, func, b64 in self._executar_sql(sql):
+                    uri = _para_data_uri(b64)
+                    if uri:
+                        fotos[(int(emp), int(func))] = uri
+            except Exception as exc:  # noqa: BLE001 - foto é opcional
+                log.warning("Não foi possível buscar fotos (%d funcionário(s)): %s", len(grupo), exc)
+        return fotos
 
 
 def _mime_por_bytes(raw: bytes) -> str | None:
@@ -220,12 +249,44 @@ def _nome_proprio(nome: str) -> str:
     return " ".join(p if p in minusculas else p.capitalize() for p in nome.lower().split())
 
 
+_SUFIXOS_EMPRESA = {
+    "ltda", "ltda.", "eireli", "me", "epp", "s/a", "s.a.", "s.a", "sa", "mei", "slu", "-",
+}
+_CONECTIVOS = {"da", "de", "do", "das", "dos", "e"}
+
+
+def nome_empresa(codigo: int | None, razao_social: str, apelidos: dict[int, str] | None = None) -> str:
+    """Nome da empresa para o card: apelido configurado ou razão social sem sufixos societários."""
+    if apelidos and codigo in apelidos:
+        return apelidos[codigo]
+    palavras = razao_social.split()
+    while palavras and palavras[-1].lower() in _SUFIXOS_EMPRESA:
+        palavras.pop()
+    return " ".join(
+        p.lower() if p.lower() in _CONECTIVOS and i else p.capitalize() for i, p in enumerate(palavras)
+    )
+
+
+def parse_apelidos(valor: str) -> dict[int, str]:
+    """'1=Casa Contente Matriz;2=Casa Contente Filial' -> {1: '...', 2: '...'}."""
+    apelidos: dict[int, str] = {}
+    for item in valor.split(";"):
+        if "=" in item:
+            cod, nome = item.split("=", 1)
+            if cod.strip().isdigit() and nome.strip():
+                apelidos[int(cod.strip())] = nome.strip()
+    return apelidos
+
+
 def _desc(obj: dict | None) -> str:
     return ((obj or {}).get("descricao") or "").strip()
 
 
 def aniversariantes_do_mes(
-    funcionarios: list[dict], mes: int, situacoes_ativas: set[str] = SITUACOES_ATIVAS_PADRAO
+    funcionarios: list[dict],
+    mes: int,
+    situacoes_ativas: set[str] = SITUACOES_ATIVAS_PADRAO,
+    apelidos_empresa: dict[int, str] | None = None,
 ) -> list[Funcionario]:
     resultado: list[Funcionario] = []
     vistos: set[tuple[int, int]] = set()
@@ -252,7 +313,11 @@ def aniversariantes_do_mes(
                 nascimento=nascimento,
                 departamento=_desc(lotacao.get("departamento")).title(),
                 cargo=_desc(lotacao.get("cargo")).title(),
-                empresa=((contrato.get("empresa") or {}).get("razaoSocial") or "").strip(),
+                empresa=nome_empresa(
+                    (contrato.get("empresa") or {}).get("codigo") or f.get("codigoEmpresa"),
+                    ((contrato.get("empresa") or {}).get("razaoSocial") or "").strip(),
+                    apelidos_empresa,
+                ),
             )
         )
     resultado.sort(key=lambda x: (x.nascimento.day, x.nome))
