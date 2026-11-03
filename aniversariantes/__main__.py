@@ -132,19 +132,17 @@ def main() -> int:
         "e desejar a todos muita saúde, sucesso e felicidade.",
     ]
 
-    enviar_email(
-        host=env("SMTP_HOST", obrigatorio=True),
-        port=int(env("SMTP_PORT", "587")),
-        usuario=env("SMTP_USER"),
-        senha=env("SMTP_PASSWORD"),
-        remetente=env("EMAIL_REMETENTE") or env("SMTP_USER", obrigatorio=True),
+    message_id = enviar_email(
+        regiao=env("AWS_REGION") or env("AWS_DEFAULT_REGION", "us-east-1"),
+        remetente=env("EMAIL_REMETENTE", obrigatorio=True),
+        configuration_set=env("SES_CONFIGURATION_SET") or None,
         destinatarios=destinatarios,
         assunto=f"Aniversariantes do mês de {mes_txt}",
         corpo_texto="\n\n".join(paragrafos),
         corpo_html="".join(f"<p>{p}</p>" for p in paragrafos),
         anexo=pdf,
     )
-    log.info("E-mail enviado para %s", ", ".join(destinatarios))
+    log.info("E-mail enviado via SES para %s (MessageId %s)", ", ".join(destinatarios), message_id)
     return 0
 
 

@@ -21,6 +21,7 @@ Roda como **Cron Job no [Render](https://render.com)** a partir de uma imagem Do
 - [Rodando localmente](#rodando-localmente)
 - [Testando o envio real para o seu e-mail](#testando-o-envio-real-para-o-seu-e-mail)
 - [Deploy no Render](#deploy-no-render)
+- [Configurando o Amazon SES](#configurando-o-amazon-ses)
 - [Fotos dos colaboradores](#fotos-dos-colaboradores)
 - [Regras de negócio](#regras-de-negócio)
 - [Segurança](#segurança)
@@ -37,7 +38,7 @@ flowchart LR
     C --> D{Ativo e faz<br/>aniversário no mês?}
     D -- sim --> E[📷 Busca foto<br/>opcional]
     E --> F[🎨 Gera PDF A4<br/>HTML + WeasyPrint]
-    F --> G[✉️ Envia e-mail<br/>SMTP com anexo]
+    F --> G[✉️ Envia e-mail<br/>Amazon SES com anexo]
     G --> H[RH imprime 🎂]
 ```
 
@@ -53,7 +54,7 @@ flowchart LR
 3. **Filtro**: mantém só os colaboradores **ativos** com nascimento no mês do envio (veja [Regras de negócio](#regras-de-negócio)).
 4. **Fotos** (opcional): veja [Fotos dos colaboradores](#fotos-dos-colaboradores).
 5. **PDF**: um template HTML/CSS (`templates/aniversariantes.html`) é renderizado com Jinja2 e convertido em PDF pelo WeasyPrint.
-6. **E-mail**: enviado via SMTP (STARTTLS na porta 587 ou SSL na 465), com o PDF em anexo.
+6. **E-mail**: enviado pelo **Amazon SES** (API v2, `SendEmail` com conteúdo *raw*), com o PDF em anexo. Veja [Configurando o Amazon SES](#configurando-o-amazon-ses).
 
 ## O PDF
 
@@ -82,7 +83,7 @@ aniversariantes-contente/
 │   ├── __main__.py       # orquestra tudo (CLI)
 │   ├── sankhya.py        # cliente da API Sankhya: login, funcionários, fotos, filtros
 │   ├── pdf.py            # renderiza o template e gera o PDF
-│   └── email_sender.py   # envio SMTP com anexo
+│   └── email_sender.py   # envio via Amazon SES com anexo
 ├── templates/
 │   ├── aniversariantes.html  # layout festivo do PDF (HTML + CSS)
 │   └── fonts/                # fontes embutidas
@@ -110,10 +111,10 @@ Localmente, copie `.env.example` para `.env`. No Render, configure as variáveis
 | `SITUACOES_ATIVAS` | | Situações consideradas ativas. Padrão `1,2,3,4,5,6,7,9` |
 | `MOSTRAR_FOTOS` | | `true`/`false`. Padrão `true` |
 | `SANKHYA_CAMPO_FOTO` | | Campo da foto na entidade `Funcionario`. Padrão `IMAGEM` |
-| `SMTP_HOST` | ✅ | Ex.: `smtp.office365.com`, `smtp.gmail.com` |
-| `SMTP_PORT` | | `587` (STARTTLS, padrão) ou `465` (SSL) |
-| `SMTP_USER` / `SMTP_PASSWORD` | ✅ | Credenciais SMTP. Use uma senha de aplicativo se a conta tiver MFA |
-| `EMAIL_REMETENTE` | | Padrão = `SMTP_USER` |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | ✅ | Chaves do usuário IAM que só pode enviar e-mail (veja abaixo) |
+| `AWS_REGION` | ✅ | Região onde o SES está configurado, ex.: `sa-east-1` (São Paulo) |
+| `EMAIL_REMETENTE` | ✅ | Remetente **verificado no SES**, ex.: `aniversarios@suaempresa.com.br` |
+| `SES_CONFIGURATION_SET` | | Configuration set do SES, para métricas de entrega e bounce (opcional) |
 | `EMAIL_DESTINATARIOS` | ✅ | E-mails do RH, separados por vírgula (ficam só no Render, fora do repositório público) |
 | `NOME_EMPRESA` | | Texto do cabeçalho e do rodapé do PDF. Padrão `Casa Contente` |
 | `TZ_EMPRESA` | | Fuso usado para definir "o mês atual". Padrão `America/Sao_Paulo` |
@@ -154,7 +155,7 @@ Use `testar-envio.sh` para receber o **arquivo real** (dados da Sankhya) **somen
 ```bash
 ./testar-envio.sh voce@suaempresa.com.br                # mês atual
 ./testar-envio.sh voce@suaempresa.com.br --mes 12       # outro mês
-./testar-envio.sh voce@suaempresa.com.br --exemplo      # dados fictícios (testa só o SMTP)
+./testar-envio.sh voce@suaempresa.com.br --exemplo      # dados fictícios (testa só o envio pelo SES)
 ```
 
 O script equivale a `./run.sh --para voce@suaempresa.com.br`. A opção `--para` pode ser repetida para mandar a mais de um endereço.
@@ -176,9 +177,32 @@ O serviço é um **Cron Job** com runtime **Docker**, definido em [`render.yaml`
 
 **Primeira vez:**
 1. No Render, crie o Cron Job apontando para este repositório (ou use **New → Blueprint**, que lê o `render.yaml`).
-2. Em **Environment**, preencha as variáveis obrigatórias (`SANKHYA_*`, `SMTP_*`, `EMAIL_REMETENTE`, `EMAIL_DESTINATARIOS`).
+2. Em **Environment**, preencha as variáveis obrigatórias (`SANKHYA_*`, `AWS_*`, `EMAIL_REMETENTE`, `EMAIL_DESTINATARIOS`).
 3. Use **Trigger Run** para disparar uma vez. Atenção: isso envia o e-mail de verdade para o RH. Para um teste seguro, use o Shell com `--para`, como mostrado acima.
 4. Os logs de cada execução ficam na aba **Logs**.
+
+## Configurando o Amazon SES
+
+O envio é feito pelo **Amazon SES**. Configuração única na AWS:
+
+1. **Verifique o remetente** em *SES → Configuration → Identities → Create identity*. Pode ser o domínio inteiro (recomendado: adicione os registros DKIM no DNS) ou só o endereço do `EMAIL_REMETENTE`.
+2. **Saia do sandbox** (*SES → Account dashboard → Request production access*). Enquanto a conta estiver no sandbox, o SES só entrega para endereços **verificados**. Se preferir não pedir produção, verifique também os endereços do RH e o seu e-mail de teste.
+3. **Crie um usuário IAM** só para este projeto, com a política mínima abaixo, e gere uma *access key*:
+   ```json
+   {
+     "Version": "2012-10-17",
+     "Statement": [{
+       "Effect": "Allow",
+       "Action": ["ses:SendEmail", "ses:SendRawEmail"],
+       "Resource": "arn:aws:ses:<REGIAO>:<ID_DA_CONTA>:identity/<seu-dominio-ou-email>",
+       "Condition": { "StringEquals": { "ses:FromAddress": "<EMAIL_REMETENTE>" } }
+     }]
+   }
+   ```
+   Se a identidade verificada for o domínio, use o ARN do domínio. Se usar um configuration set, inclua também o ARN dele em `Resource`.
+4. Cadastre `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` e `EMAIL_REMETENTE` no Render.
+
+O limite do SES é de 40 MB por mensagem; o PDF costuma ter menos de 1 MB.
 
 ## Fotos dos colaboradores
 
@@ -216,7 +240,8 @@ Outras regras:
 
 - **Nenhuma credencial fica no código.** Tudo vem de variáveis de ambiente. O `.env` está no `.gitignore` e no `.dockerignore`.
 - No Render, as variáveis sensíveis (incluindo os e-mails do RH) são cadastradas no painel e não ficam no `render.yaml`.
-- O cliente Sankhya usa apenas HTTPS, e o SMTP exige TLS (STARTTLS ou SSL) com verificação de certificado.
+- A Sankhya e o SES são acessados apenas via HTTPS.
+- O usuário IAM do SES tem **permissão mínima**: só pode enviar e-mail a partir da identidade verificada.
 - Os PDFs gerados (`saida/`) e as fotos (`fotos/`) **não são versionados**.
 - Mensagens de erro não exibem tokens nem senhas.
 - Para trocar credenciais, gere um novo *client secret* na Área do Desenvolvedor Sankhya ou um novo X-Token no Sankhya Om e atualize as variáveis no Render.
@@ -228,7 +253,9 @@ Outras regras:
 | `Falha na autenticação Sankhya (401)` | `client_id`, `client_secret` ou `X-Token` inválidos ou expirados |
 | `404` em `funcionarios-detalhados` | Módulo Pessoal abaixo da versão 5.126.0 |
 | PDF sem fotos (só iniciais) | Fotos não cadastradas ou aplicação sem permissão no `loadRecords`. Rode com `LOG_LEVEL=DEBUG` para ver o motivo |
-| `SMTPAuthenticationError` | Senha errada, ou a conta exige senha de aplicativo (Gmail/Office 365 com MFA) |
+| `MessageRejected: Email address is not verified` | Remetente não verificado no SES; ou a conta ainda está no **sandbox** e o destinatário também não está verificado |
+| `AccessDeniedException` (SES) | A política IAM não permite `ses:SendEmail`/`ses:SendRawEmail` na identidade, ou a `AWS_REGION` está errada |
+| `NoCredentialsError` | `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` não configuradas |
 | `cannot load library 'libgobject-2.0-0'` (macOS) | Instale o Pango (`brew install pango`). O `run.sh` já ajusta o `DYLD_FALLBACK_LIBRARY_PATH` |
 | E-mail não chegou | Confira a aba **Logs** no Render e a caixa de spam |
 
