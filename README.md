@@ -5,7 +5,7 @@ Automação que, **todo dia 1º de cada mês às 08:00 (horário de Brasília)**
 Roda como **Cron Job no [Render](https://render.com)** a partir de uma imagem Docker.
 
 <p align="center">
-  <img src="docs/pdf-exemplo.png" width="420" alt="Exemplo do PDF gerado">
+  <img src="docs/pdf-exemplo-marca.png" width="420" alt="Exemplo do PDF gerado">
 </p>
 
 > As imagens deste README usam **dados fictícios**.
