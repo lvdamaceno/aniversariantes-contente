@@ -199,13 +199,13 @@ Falta só a credencial deste projeto:
      "Version": "2012-10-17",
      "Statement": [{
        "Effect": "Allow",
-       "Action": "ses:SendEmail",
+       "Action": ["ses:SendEmail", "ses:SendRawEmail"],
        "Resource": "arn:aws:ses:us-east-2:<ID_DA_CONTA>:identity/casacontente.com.br",
        "Condition": { "StringEquals": { "ses:FromAddress": "nao-responda@casacontente.com.br" } }
      }]
    }
    ```
-   O envio com anexo usa o `SendEmail` da API v2 (conteúdo *raw*), que é autorizado pela ação `ses:SendEmail`.
+   O envio com anexo usa o `SendEmail` da API v2 com conteúdo *raw*, que o SES autoriza pela ação **`ses:SendRawEmail`**: as duas ações são necessárias. Se reaproveitar o `sync-midia` da loja, inclua `ses:SendRawEmail` na política `envio-email-loja` dele.
    Se usar um configuration set próprio (`SES_CONFIGURATION_SET`), inclua o ARN dele em `Resource`. **Não use o `loja`**: os avisos de bounce/reclamação dele vão para o backend da loja.
 2. Cadastre `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` e `EMAIL_REMETENTE` no Render (`AWS_REGION` já vem como `us-east-2` no `render.yaml`).
 
@@ -260,7 +260,7 @@ Outras regras:
 | `Falha na autenticação Sankhya (401)` | `client_id`, `client_secret` ou `X-Token` inválidos ou expirados |
 | PDF sem fotos (só iniciais) | Foto não cadastrada em TFPFUN, ou a aplicação não tem permissão no `DbExplorerSP`. O log mostra um aviso com o motivo |
 | `MessageRejected: Email address is not verified` | Remetente não verificado no SES; ou a conta ainda está no **sandbox** e o destinatário também não está verificado |
-| `AccessDeniedException` (SES) | A política IAM não permite `ses:SendEmail` na identidade, o remetente é outro, ou a `AWS_REGION` não é `us-east-2` |
+| `AccessDeniedException` (SES) | A política IAM não permite `ses:SendEmail` e `ses:SendRawEmail` na identidade, o remetente é outro, ou a `AWS_REGION` não é `us-east-2` |
 | `NoCredentialsError` | `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` não configuradas |
 | `cannot load library 'libgobject-2.0-0'` (macOS) | Instale o Pango (`brew install pango`). O `run.sh` já ajusta o `DYLD_FALLBACK_LIBRARY_PATH` |
 | E-mail não chegou | Confira a aba **Logs** no Render e a caixa de spam |
