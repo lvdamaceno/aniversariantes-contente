@@ -159,6 +159,18 @@ class SankhyaClient:
             raise RuntimeError(data.get("statusMessage") or "erro no DbExplorerSP.executeQuery")
         return (data.get("responseBody") or {}).get("rows") or []
 
+    def nomes_fantasia(self, codigos_empresa: set[int]) -> dict[int, str]:
+        """{CODEMP: NOMEFANTASIA} da TSIEMP. Retorna {} em caso de falha (cai na razão social)."""
+        codigos = sorted({int(c) for c in codigos_empresa if c is not None})
+        if not codigos:
+            return {}
+        sql = f"SELECT CODEMP, NOMEFANTASIA FROM TSIEMP WHERE CODEMP IN ({', '.join(map(str, codigos))})"
+        try:
+            return {int(cod): " ".join(nome.split()) for cod, nome in self._executar_sql(sql) if nome and nome.strip()}
+        except Exception as exc:  # noqa: BLE001 - usa a razão social como alternativa
+            log.warning("Não foi possível ler o nome fantasia em TSIEMP: %s", exc)
+            return {}
+
     def buscar_fotos(self, chaves: list[tuple[int, int]], lote: int = 10) -> dict[tuple[int, int], str]:
         """Fotos de TFPFUN.IMAGEM para os pares (CODEMP, CODFUNC). Retorna {chave: data URI}.
 
@@ -255,27 +267,14 @@ _SUFIXOS_EMPRESA = {
 _CONECTIVOS = {"da", "de", "do", "das", "dos", "e"}
 
 
-def nome_empresa(codigo: int | None, razao_social: str, apelidos: dict[int, str] | None = None) -> str:
-    """Nome da empresa para o card: apelido configurado ou razão social sem sufixos societários."""
-    if apelidos and codigo in apelidos:
-        return apelidos[codigo]
+def nome_empresa(razao_social: str) -> str:
+    """Razão social sem sufixos societários (alternativa quando não há nome fantasia)."""
     palavras = razao_social.split()
     while palavras and palavras[-1].lower() in _SUFIXOS_EMPRESA:
         palavras.pop()
     return " ".join(
         p.lower() if p.lower() in _CONECTIVOS and i else p.capitalize() for i, p in enumerate(palavras)
     )
-
-
-def parse_apelidos(valor: str) -> dict[int, str]:
-    """'1=Casa Contente Matriz;2=Casa Contente Filial' -> {1: '...', 2: '...'}."""
-    apelidos: dict[int, str] = {}
-    for item in valor.split(";"):
-        if "=" in item:
-            cod, nome = item.split("=", 1)
-            if cod.strip().isdigit() and nome.strip():
-                apelidos[int(cod.strip())] = nome.strip()
-    return apelidos
 
 
 def _desc(obj: dict | None) -> str:
@@ -286,7 +285,6 @@ def aniversariantes_do_mes(
     funcionarios: list[dict],
     mes: int,
     situacoes_ativas: set[str] = SITUACOES_ATIVAS_PADRAO,
-    apelidos_empresa: dict[int, str] | None = None,
 ) -> list[Funcionario]:
     resultado: list[Funcionario] = []
     vistos: set[tuple[int, int]] = set()
@@ -313,11 +311,7 @@ def aniversariantes_do_mes(
                 nascimento=nascimento,
                 departamento=_desc(lotacao.get("departamento")).title(),
                 cargo=_desc(lotacao.get("cargo")).title(),
-                empresa=nome_empresa(
-                    (contrato.get("empresa") or {}).get("codigo") or f.get("codigoEmpresa"),
-                    ((contrato.get("empresa") or {}).get("razaoSocial") or "").strip(),
-                    apelidos_empresa,
-                ),
+                empresa=nome_empresa(((contrato.get("empresa") or {}).get("razaoSocial") or "").strip()),
             )
         )
     resultado.sort(key=lambda x: (x.nascimento.day, x.nome))

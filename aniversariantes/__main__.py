@@ -27,7 +27,6 @@ from .sankhya import (
     SankhyaClient,
     aniversariantes_do_mes,
     foto_arquivo_local,
-    parse_apelidos,
 )
 
 RAIZ = Path(__file__).resolve().parent.parent
@@ -53,7 +52,7 @@ def dados_exemplo(mes: int) -> list[Funcionario]:
         (29, "Heitor dos Santos Pereira", "Supervisor de Loja", "Varejo"),
     ]
     return [
-        Funcionario(1, i, n, date(1990, mes, d), dep, cargo, ["Casa Contente", "Casa Contente Filial"][i % 2])
+        Funcionario(1, i, n, date(1990, mes, d), dep, cargo, ["CASA CONTENTE - MATRIZ", "CASA CONTENTE - PEDREIRA"][i % 2])
         for i, (d, n, cargo, dep) in enumerate(nomes, start=1)
     ]
 
@@ -91,8 +90,10 @@ def main() -> int:
         cod_emp = env("SANKHYA_CODIGO_EMPRESA")
         situacoes = {s.strip() for s in env("SITUACOES_ATIVAS").split(",") if s.strip()} or SITUACOES_ATIVAS_PADRAO
         funcionarios = cliente.listar_funcionarios(int(cod_emp) if cod_emp else None, situacoes)
-        apelidos = parse_apelidos(env("EMPRESAS_APELIDOS"))
-        aniversariantes = aniversariantes_do_mes(funcionarios, mes, situacoes, apelidos)
+        aniversariantes = aniversariantes_do_mes(funcionarios, mes, situacoes)
+        fantasia = cliente.nomes_fantasia({f.codigo_empresa for f in aniversariantes})
+        for f in aniversariantes:
+            f.empresa = fantasia.get(f.codigo_empresa) or f.empresa
 
         if mostrar_fotos:
             fotos = cliente.buscar_fotos([(f.codigo_empresa, f.codigo) for f in aniversariantes])

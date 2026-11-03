@@ -34,11 +34,6 @@
     font-size: 34pt; line-height: 1.1; margin: 5mm 0 0 0; color: #3c3c3a;
   }
   header h1 em { font-style: normal; color: #d71921; }
-  header .sub {
-    display: inline-block; margin-top: 4mm; padding: 1.5mm 6mm;
-    background: #fff3d1; border-radius: 20mm;
-    font-weight: 700; font-size: 10.5pt; color: #7a5200;
-  }
 
   /* ---------- cards ---------- */
   .grid { display: block; font-size: 0; }
@@ -133,9 +128,6 @@
 
   <img class="logo" src="logo.svg" alt="Casa Contente">
   <h1>Aniversariantes de <em>{{ mes_nome }}</em></h1>
-  <div class="sub">
-    {% if total == 1 %}1 aniversariante{% else %}{{ total }} aniversariantes{% endif %} em {{ ano }}
-  </div>
 </header>
 
 {% if itens %}

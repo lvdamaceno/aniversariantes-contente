@@ -5,7 +5,7 @@ Automação que, **todo dia 1º de cada mês às 08:00 (horário de Brasília)**
 Roda como **Cron Job no [Render](https://render.com)** a partir de uma imagem Docker.
 
 <p align="center">
-  <img src="docs/pdf-exemplo-empresa.png" width="420" alt="Exemplo do PDF gerado">
+  <img src="docs/pdf-exemplo-fantasia.png" width="420" alt="Exemplo do PDF gerado">
 </p>
 
 > As imagens deste README usam **dados fictícios**.
@@ -61,7 +61,7 @@ flowchart LR
 - Formato **A4 retrato**, pronto para imprimir e fixar no mural.
 - Identidade visual da **Casa Contente** (cores, fontes e logo, as mesmas do site), com clima festivo: bandeirinhas, balões e confetes em vermelho e amarelo.
 - Um card por pessoa com **foto** (ou as iniciais), **nome**, **empresa** e **data (DD/MM)**, em ordem de dia.
-- A empresa vem da razão social cadastrada na Sankhya, sem sufixos como LTDA, ME ou EIRELI. Para usar um nome mais curto, configure `EMPRESAS_APELIDOS` (ex.: `1=Casa Contente Matriz;2=Casa Contente Filial`).
+- A empresa é o **nome fantasia** cadastrado em `TSIEMP` (ex.: "CASA CONTENTE - MATRIZ"). Se ele não estiver disponível, o card mostra a razão social sem sufixos como LTDA ou ME.
 - Quando há muitos aniversariantes, a lista continua nas páginas seguintes, sem cortar nenhum card.
 - No final vem a mensagem:
   > *Parabéns e muitas felicidades!*
@@ -111,7 +111,6 @@ Localmente, copie `.env.example` para `.env`. No Render, configure as variáveis
 | `SANKHYA_X_TOKEN` | ✅ | Token da tela **Configurações Gateway** no Sankhya Om |
 | `SANKHYA_BASE_URL` | | Padrão `https://api.sankhya.com.br` (sandbox: `https://api.sandbox.sankhya.com.br`) |
 | `SANKHYA_CODIGO_EMPRESA` | | Filtra uma empresa. Vazio = todas |
-| `EMPRESAS_APELIDOS` | | Nome da empresa no card, por código. Ex.: `1=Casa Contente Matriz;2=Casa Contente Filial` |
 | `SITUACOES_ATIVAS` | | Situações consideradas ativas. Padrão `1,2,3,4,5,6,7,9` |
 | `MOSTRAR_FOTOS` | | `true`/`false`. Padrão `true` |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | ✅ | Chaves do usuário IAM que só pode enviar e-mail (veja abaixo) |
