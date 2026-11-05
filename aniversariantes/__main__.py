@@ -81,11 +81,14 @@ def main() -> int:
     if args.exemplo:
         aniversariantes = dados_exemplo(mes)
     else:
+        central = env("SANKHYA_PROXY_URL")
         cliente = SankhyaClient(
             base_url=env("SANKHYA_BASE_URL", "https://api.sankhya.com.br"),
-            client_id=env("SANKHYA_CLIENT_ID", obrigatorio=True),
-            client_secret=env("SANKHYA_CLIENT_SECRET", obrigatorio=True),
-            x_token=env("SANKHYA_X_TOKEN", obrigatorio=True),
+            client_id=env("SANKHYA_CLIENT_ID", obrigatorio=not central),
+            client_secret=env("SANKHYA_CLIENT_SECRET", obrigatorio=not central),
+            x_token=env("SANKHYA_X_TOKEN", obrigatorio=not central),
+            central_url=central,
+            central_chave=env("SANKHYA_PROXY_CHAVE", obrigatorio=bool(central)),
         )
         cod_emp = env("SANKHYA_CODIGO_EMPRESA")
         situacoes = {s.strip() for s in env("SITUACOES_ATIVAS").split(",") if s.strip()} or SITUACOES_ATIVAS_PADRAO
