@@ -21,6 +21,9 @@ log = logging.getLogger(__name__)
 
 # Situações (dadosContratuais.situacao) segundo a API Sankhya:
 # 0 Demitido | 1 Atividade normal | 2-7 Afastamentos | 8 Transferido | 9 Aposentadoria por invalidez
+# Uma chamada à central pode esperar até 120 s na fila e mais 60 s no Sankhya.
+TEMPO_LIMITE_CENTRAL = 200
+
 SITUACOES_ATIVAS_PADRAO = {"1", "2", "3", "4", "5", "6", "7", "9"}
 
 
@@ -44,8 +47,12 @@ class Funcionario:
 
 
 class SankhyaClient:
-    def __init__(self, base_url: str, client_id: str, client_secret: str, x_token: str, timeout: int = 60):
+    def __init__(self, base_url: str, client_id: str, client_secret: str, x_token: str, timeout: int = 60,
+                 central_url: str = "", central_chave: str = ""):
         self.base_url = base_url.rstrip("/")
+        # Conexão central (sankhya-central): com ela, as credenciais e o token ficam lá.
+        self.central_url = central_url.rstrip("/")
+        self.central_chave = central_chave
         self.client_id = client_id
         self.client_secret = client_secret
         self.x_token = x_token
@@ -79,9 +86,15 @@ class SankhyaClient:
             self._autenticar()
         return {"Authorization": f"Bearer {self._token}", "Accept": "application/json"}
 
+    def _pedir_get(self, path: str, params: dict) -> requests.Response:
+        if self.central_url:
+            return self.session.get(f"{self.central_url}/pessoal", headers={"x-proxy-chave": self.central_chave, "Accept": "application/json"},
+                                    params={"caminho": path, **params}, timeout=TEMPO_LIMITE_CENTRAL)
+        return self.session.get(f"{self.base_url}{path}", headers=self._headers(), params=params, timeout=self.timeout)
+
     def _get(self, path: str, params: dict) -> dict:
         for tentativa in range(3):
-            resp = self.session.get(f"{self.base_url}{path}", headers=self._headers(), params=params, timeout=self.timeout)
+            resp = self._pedir_get(path, params)
             if resp.status_code == 401 and tentativa == 0:
                 self._token = None  # token expirado/revogado: reautentica
                 continue
@@ -139,13 +152,24 @@ class SankhyaClient:
             d["codigoEmpresa"], d["codigoFuncionario"] = emp, func
             return d
 
-        self._headers()  # autentica antes de paralelizar
+        if not self.central_url:
+            self._headers()  # autentica antes de paralelizar
         with ThreadPoolExecutor(max_workers=5) as pool:
             return list(pool.map(detalhar, codigos))
 
     # ------------------------------------------------------------------ fotos
     def _executar_sql(self, sql: str) -> list[list]:
         """Consulta somente leitura via DbExplorerSP.executeQuery (Gateway)."""
+        if self.central_url:
+            resp = self.session.post(f"{self.central_url}/servico", headers={"x-proxy-chave": self.central_chave},
+                                     json={"nome": "DbExplorerSP.executeQuery", "corpo": {"sql": sql}, "semCache": True},
+                                     timeout=TEMPO_LIMITE_CENTRAL)
+            if not resp.ok:
+                raise RuntimeError(f"Conexão central ({resp.status_code}): {resp.text[:300]}")
+            data = resp.json()["d"]
+            if str(data.get("status")) != "1":
+                raise RuntimeError(data.get("statusMessage") or "erro no DbExplorerSP.executeQuery")
+            return (data.get("responseBody") or {}).get("rows") or []
         resp = self.session.post(
             f"{self.base_url}/gateway/v1/mge/service.sbr",
             params={"serviceName": "DbExplorerSP.executeQuery", "outputType": "json"},
